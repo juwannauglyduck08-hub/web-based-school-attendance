@@ -285,7 +285,7 @@ def verify_face():
     if os.path.exists(temp_path): os.remove(temp_path)
 
     # Ibalik ang verified data kasama ang Supabase URL at pixels papuntang /api/verify
-    return jsonify({
+    return jsonify(
         "ok": True,
         "message": f"Verified: {row_data[1]}",
         "student_id": row_data[0],
