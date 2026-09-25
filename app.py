@@ -23,7 +23,7 @@ import cloudinary
 import cloudinary.uploader
 from supabase import create_client, Client
 
-app = Flask(_name_)
+app = Flask(__name__)
 app.secret_key = os.environ.get(
     "SECRET_KEY", "attendance-system-secure-key"
 )
