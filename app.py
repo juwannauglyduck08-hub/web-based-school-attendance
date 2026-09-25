@@ -410,7 +410,7 @@ def export_attendance():
   return res
 
 
-if _name_ == "_main_":
+if __name__ == "__main__":
   threading.Timer(
       1.2, lambda: webbrowser.open_new("http://127.0.0.1:5000")
   ).start()
