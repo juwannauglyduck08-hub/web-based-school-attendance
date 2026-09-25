@@ -23,7 +23,7 @@ import cloudinary
 import cloudinary.uploader
 from supabase import create_client, Client
 
-app = Flask(__name__)
+app = Flask(_name_)
 app.secret_key = os.environ.get(
     "SECRET_KEY", "attendance-system-secure-key"
 )
@@ -36,7 +36,7 @@ cloudinary.config(
 )
 
 # Supabase Config (Para sa Verification Scanned Faces Storage)
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://bkfbrdpmkekoojaosjge.supabase.co")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_4uUNWyLcGU5xe9PSlHBDWQ_aZtCRyIZ")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -54,7 +54,7 @@ def init_db():
     cur.execute(
         "CREATE TABLE IF NOT EXISTS students (student_id TEXT PRIMARY KEY, name TEXT, grade TEXT, section TEXT, parent TEXT, phone TEXT, face_url TEXT)"
     )
-    # Idinagdag ang scanned_face_url at dimensions para sa storage log ni ma'am
+    # Sinisigurado nating may storage link table parameters para sa logs ni ma'am
     cur.execute(
         "CREATE TABLE IF NOT EXISTS attendance (id SERIAL PRIMARY KEY, student_id TEXT, name TEXT, grade TEXT, section TEXT, kind TEXT, timestamp TEXT, scanned_face_url TEXT, dimensions TEXT)"
     )
@@ -215,13 +215,9 @@ def verify_face():
 
     (x, y, w, h) = tf[0]
     
-    # 1. Hiniwa o kinrop natin ang mukha para sakto lang sa frame ayon sa gusto mo
+    # 1. Hiwang mukha (Facial Crop) para eksakto lang sa screen box
     cropped_face = target_img[y : y + h, x : x + w]
-    
-    # Kuhanin ang eksaktong laki o pixels ng mukhang nakuha (Hal. 115x115 px)
     dimensions_str = f"{w}x{h} px"
-    
-    # I-resize para sa temporary template algorithm verification template matching
     t_roi = cv2.resize(cropped_face, (120, 120))
 
     conn = get_db()
@@ -259,32 +255,26 @@ def verify_face():
         if os.path.exists(temp_path): os.remove(temp_path)
         return jsonify({"ok": False, "message": "Face not recognized."})
 
-    # 2. Kapag na-verify, i-save ang cropped face image at i-upload sa Supabase Storage bucket
+    # 2. I-upload ang cropped face photo sa iyong Supabase Storage bucket
     scanned_face_url = ""
     try:
-        # I-save ang hiwang mukha pansamantala para mai-upload
         crop_path = "crop_temp.jpg"
         cv2.imwrite(crop_path, cv2.resize(cropped_face, (150, 150)))
-        
         filename = f"scan_{best_sid}_{int(datetime.now().timestamp())}.jpg"
         
         with open(crop_path, 'rb') as f:
-            storage_res = supabase.storage.from_("scanned_faces").upload(
+            supabase.storage.from_("scanned_faces").upload(
                 path=filename,
                 file=f,
                 file_options={"content-type": "image/jpeg"}
             )
-        
-        # Kunin ang pampublikong URL mula sa Supabase bucket storage link niyo
         scanned_face_url = supabase.storage.from_("scanned_faces").get_public_url(filename)
-        
         if os.path.exists(crop_path): os.remove(crop_path)
     except Exception as e:
         print(f"Supabase Upload error: {str(e)}")
 
     if os.path.exists(temp_path): os.remove(temp_path)
 
-    # Ibalik ang verified data kasama ang Supabase URL at pixels papuntang /api/verify
     return jsonify({
         "ok": True,
         "message": f"Verified: {row_data[1]}",
@@ -292,5 +282,24 @@ def verify_face():
         "name": row_data[1],
         "grade": row_data[2],
         "section": row_data[3],
-        "scanned_face_url": scanned_face_url
+        "scanned_face_url": scanned_face_url,
+        "dimensions": dimensions_str
     })
+
+@app.route("/api/qr/<sid>")
+def get_qr(sid):
+    import qrcode
+    buf = io.BytesIO()
+    qrcode.make(sid).save(buf, "PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+@app.route("/api/verify", methods=["POST"])
+def verify():
+    sid = request.form.get("student_id")
+    kind = request.form.get("kind", "Time In")
+    scanned_face_url = request.form.get("scanned_face_url", "")
+   
+
+
+   
