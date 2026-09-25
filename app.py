@@ -85,7 +85,7 @@ def send_sms(phone, parent, name, grade, section, kind, ts):
             headers={"x-api-key": TEXTBEE_API_KEY},
             timeout=10,
         )
-        return r.status_code in [200, 201]
+        return r.status_code == 200
     except:
         return False
 
@@ -164,28 +164,24 @@ def register_student():
     cur = conn.cursor()
     try:
         cur.execute(
-            """
-            INSERT INTO students (student_id, name, grade, section, parent, phone, face_url)
+            
+            "INSERT INTO students (student_id, name, grade, section, parent, phone, face_url)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (student_id) DO UPDATE SET
             name=EXCLUDED.name, grade=EXCLUDED.grade, section=EXCLUDED.section,
-            parent=EXCLUDED.parent, phone=EXCLUDED.phone, face_url=EXCLUDED.face_url
-            """,
-            (
-                sid,
+            parent=EXCLUDED.parent, phone=EXCLUDED.phone, face_url=EXCLUDED.face_url",
+            
+                (sid,
                 f.get("name"),
                 f.get("grade"),
                 f.get("section"),
                 f.get("parent"),
                 f.get("phone"),
                 face_url,
-            ),
-        )
+            )
+        
         conn.commit()
-        return jsonify({
-            "ok": True,
-            "message": f"Student {f.get('name')} registered successfully!",
-        })
+        return jsonify({"ok": True, "message": f"Student {f.get('name')} registered!"})
     except Exception as e:
         return jsonify({"ok": False, "message": f"DB error: {str(e)}"})
     finally:
@@ -215,7 +211,7 @@ def verify_face():
 
     (x, y, w, h) = tf[0]
     
-    # 1. Hiwang mukha (Facial Crop) para eksakto lang sa screen box
+    
     cropped_face = target_img[y : y + h, x : x + w]
     dimensions_str = f"{w}x{h} px"
     t_roi = cv2.resize(cropped_face, (120, 120))
@@ -236,10 +232,8 @@ def verify_face():
             resp = requests.get(face_url, timeout=5)
             if resp.status_code != 200:
                 continue
-            k_img = cv2.imdecode(
-                np.asarray(bytearray(resp.content), dtype=np.uint8),
-                cv2.IMREAD_GRAYSCALE,
-            )
+            k_img = cv2.imdecode(np.asarray(bytearray(resp.content), dtype=np.uint8),
+                cv2.IMREAD_GRAYSCALE)
             if k_img is None:
                 continue
             if k_img.shape != (120, 120):
@@ -253,28 +247,21 @@ def verify_face():
 
     if max_score < 0.38 or not best_sid:
         if os.path.exists(temp_path): os.remove(temp_path)
-        return jsonify({"ok": False, "message": "Face not recognized."})
-
-    # 2. I-upload ang cropped face photo sa iyong Supabase Storage bucket
+        return jsonify({"ok": False, "message": "Face not recognized."}
+        
     scanned_face_url = ""
     try:
         crop_path = "crop_temp.jpg"
         cv2.imwrite(crop_path, cv2.resize(cropped_face, (150, 150)))
         filename = f"scan_{best_sid}_{int(datetime.now().timestamp())}.jpg"
-        
         with open(crop_path, 'rb') as f:
-            supabase.storage.from_("scanned_faces").upload(
-                path=filename,
-                file=f,
-                file_options={"content-type": "image/jpeg"}
-            )
+            supabase.storage.from_("scanned_faces").upload(path=filename, file=f, file_options={"content-type": "image/jpeg"})
         scanned_face_url = supabase.storage.from_("scanned_faces").get_public_url(filename)
         if os.path.exists(crop_path): os.remove(crop_path)
     except Exception as e:
         print(f"Supabase Upload error: {str(e)}")
 
     if os.path.exists(temp_path): os.remove(temp_path)
-
     return jsonify({
         "ok": True,
         "message": f"Verified: {row_data[1]}",
@@ -300,6 +287,26 @@ def verify():
     kind = request.form.get("kind", "Time In")
     scanned_face_url = request.form.get("scanned_face_url", "")
     dimensions = request.form.get("dimensions", "")
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT name, grade, section, parent, phone FROM students WHERE student_id=%s", (sid,))
+    student = cur.fetchone()
+    if not student:
+         cur.close()
+         conn.close()
+         return jsonify({"ok": False, "message": "Student not found."})
+
+    name, grade, section, parent, phone = student
+    ts = datetime.now(ZoneInfo("Asia/Manila")).strftime("%Y-%m-%d %I:%M %p")
+    cur.execute(
+         "INSERT INTO attendance (student_id, name, grade, section, kind, timestamp, scanned_face_url, dimensions) VALUES (%S, %S, %S, %S, %S, %S, %S, %S)",
+         (sid, name, grade, section, kind, ts, scanned_face_url, dimensions),
+         )
+    conn. commit()
+    cur.close()
+    conn.close()
+    
    
 
 
