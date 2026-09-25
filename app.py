@@ -299,6 +299,7 @@ def verify():
     sid = request.form.get("student_id")
     kind = request.form.get("kind", "Time In")
     scanned_face_url = request.form.get("scanned_face_url", "")
+    dimensions = request.form.get("dimensions", "")
    
 
 
