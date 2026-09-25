@@ -36,8 +36,8 @@ cloudinary.config(
 )
 
 # Supabase Config (Para sa Verification Scanned Faces Storage)
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "IYONG_SUPABASE_URL_DITO")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "IYONG_SUPABASE_ANON_KEY_DITO")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://bkfbrdpmkekoojaosjge.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_4uUNWyLcGU5xe9PSlHBDWQ_aZtCRyIZ")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
