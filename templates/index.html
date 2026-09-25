@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Student Attendance Monitoring</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+*{box-sizing:border-box;font-family:Arial,sans-serif}body{margin:0;background:#f3f6f8;color:#222}
+header{background:#24577e;color:#fff;padding:12px;text-align:center;position:relative}
+main{max-width:950px;margin:auto;padding:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:#fff;padding:12px;border-radius:8px;box-shadow:0 2px 5px #0001;margin-bottom:12px}
+h2{color:#24577e;margin:0 0 6px;font-size:1rem}input,select,button{width:100%;padding:8px;margin:3px 0;border:1px solid #ccc;border-radius:4px}
+button{background:#24577e;color:#fff;border:0;font-weight:bold;cursor:pointer}
+video{width:100%;height:280px;background:#111;border-radius:5px;object-fit:cover;}
+.status{background:#eef2f5;padding:8px;margin-top:4px;border-radius:4px;font-size:.85rem}
+.ok{background:#e8f5e9;color:#2e7d32}.bad{background:#ffebee;color:#c62828}#qr img{width:120px;display:block;margin:auto}
+table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #ddd;font-size:.8rem}th{background:#f0f4f8;color:#24577e}
+.modal{position:fixed;inset:0;background:#0008;display:flex;justify-content:center;align-items:center;z-index:9}.box{background:#fff;padding:18px;border-radius:8px;width:280px}
+.tab{width:48%;display:inline-block;background:#eee;text-align:center;padding:5px;cursor:pointer;border-radius:3px}.tab.active{background:#24577e;color:#fff}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+</style></head>
+<body>
+
+<div id="authModal" class="modal"><div class="box">
+  <div style="margin-bottom:8px;"><span id="t1" class="tab active" onclick="tab('login')">Login</span><span id="t2" class="tab" onclick="tab('reg')">Register</span></div>
+  <form id="fL" onsubmit="auth('/api/login',{username:u1.value,password:p1.value})"><h2>Sign In</h2><input id="u1" placeholder="Username" required><input id="p1" type="password" placeholder="Password" required><button>Login</button></form>
+  <form id="fR" onsubmit="auth('/api/register_user',{username:u2.value,password:p2.value})" style="display:none;"><h2>Create Account</h2><input id="u2" placeholder="Username" required><input id="p2" type="password" placeholder="Password" required><button>Register</button></form>
+  <div id="authMsg" class="status" style="display:none;"></div>
+</div></div>
+
+<header><h1 style="margin:0;font-size:1.2rem;">Student Attendance Monitoring</h1><button onclick="logout()" id="loBtn" style="position:absolute;right:10px;top:10px;width:auto;background:#d32f2f;display:none;padding:5px 10px;">Logout</button></header>
+
+<main id="mainApp" style="display:none;">
+<div class="grid">
+  <section class="card">
+    <h2>1. Student Registration</h2>
+    <form onsubmit="regStudent(event)">
+      <input name="student_id" placeholder="Student ID" required><input name="name" placeholder="Name" required>
+      <input name="grade" placeholder="Grade" required><input name="section" placeholder="Section" required>
+      <input name="parent" placeholder="Parent Name" required><input name="phone" placeholder="Parent Phone (+63...)" required>
+      <label style="font-size:0.8rem;color:#555;margin-top:4px;display:block;">Upload Face Photo:</label>
+      <input name="face_image" type="file" accept="image/*" required><button type="submit">Register Student</button>
+    </form>
+    <div id="regMsg" class="status">Ready.</div>
+  </section>
+
+  <section class="card">
+    <h2>2. Face Recognition & QR</h2>
+    <video id="faceVideo" autoplay playsinline></video>
+    <div style="display:flex;gap:4px;margin-top:5px;"><button type="button" onclick="startCam('face')">Start Cam</button><button type="button" onclick="verifyFace()" style="background:#e65100;">Recognize</button></div>
+    <div id="faceMsg" class="status">Ready. Make sure your face is well-lit.</div>
+    <div id="qrContainer" hidden><div id="qr" style="text-align:center;margin-top:5px;"></div></div>
+  </section>
+
+  <section class="card">
+    <h2>3. QR Code Scanner</h2>
+    <video id="qrVideo" autoplay playsinline></video><canvas id="canvas" hidden></canvas>
+    <button type="button" onclick="startQRScan()" style="margin-top:5px;">Start Scanner</button>
+    <div id="camMsg" class="status">Stopped.</div>
+  </section>
+
+  <section class="card">
+    <h2>4. Manual Attendance</h2>
+    <input id="sid" placeholder="Student ID">
+    <select id="kind"><option>Time In</option><option>Time Out</option></select>
+    <button type="button" onclick="submitAtt(sid.value)" style="background:#2e7d32;">Submit</button>
+    <div id="verMsg" class="status">Ready.</div>
+  </section>
+</div>
+
+<section class="card"><h2>Notification</h2><div id="notify" class="status">Waiting...</div></section>
+
+<section class="card">
+  <h2>Attendance Log</h2>
+  <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
+    <div style="flex:1;min-width:140px;">
+      <label style="font-size:0.75rem;color:#555;display:block;">Filter by Section:</label>
+      <select id="sectionFilter" onchange="loadRecords()" style="margin:0;">
+        <option value="All">All Sections</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:4px;margin-top:15px;">
+      <button type="button" onclick="loadRecords()">Refresh</button>
+      <button type="button" onclick="exportCSV()" style="background:#2e7d32;">Export CSV</button>
+      <button type="button" onclick="clearRecords()" style="background:#c62828;">Clear</button>
+    </div>
+  </div>
+  <div id="rows" class="status">No records.</div>
+</section>
+</main>
+
+<script>
+let fStream, qStream, qScan=false;
+function tab(t){ fL.style.display=t==='login'?'block':'none'; fR.style.display=t==='login'?'none':'block'; t1.className='tab '+(t==='login'?'active':''); t2.className='tab '+(t==='login'?'':'active'); }
+
+async function checkAuth(){
+  let r = await (await fetch('/api/auth_status')).json();
+  authModal.style.display = r.logged_in ? 'none' : 'flex';
+  mainApp.style.display = loBtn.style.display = r.logged_in ? 'block' : 'none';
+  if(r.logged_in) {
+    resetScreen();
+    await loadSections();
+    loadRecords();
+  }
+}
+
+function resetScreen(){
+  sid.value = '';
+  verMsg.textContent = 'Ready.';
+  verMsg.className = 'status';
+  faceMsg.textContent = 'Ready. Make sure your face is well-lit.';
+  faceMsg.className = 'status';
+  notify.innerHTML = 'Waiting...';
+  notify.className = 'status';
+  qrContainer.hidden = true;
+  qr.innerHTML = '';
+}
+
+async function auth(url, body){
+  event.preventDefault();
+  let r = await (await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+  authMsg.style.display='block'; authMsg.textContent=r.message; authMsg.className='status '+(r.ok?'ok':'bad');
+  if(r.ok) { if(url.includes('login')) { u1.value=''; p1.value=''; checkAuth(); } else tab('login'); }
+}
+
+async function logout(){
+  await fetch('/api/logout');
+  u1.value = ''; p1.value = ''; authMsg.style.display = 'none';
+  checkAuth();
+}
+
+async function regStudent(e){
+  e.preventDefault();
+  let r = await (await fetch('/api/register',{method:'POST',body:new FormData(e.target)})).json();
+  regMsg.textContent = r.message; regMsg.className = 'status '+(r.ok?'ok':'bad');
+  if(r.ok) { e.target.reset(); loadSections(); }
+}
+
+async function startCam(type){
+  try{
+    if(type==='face') { fStream = fStream || await navigator.mediaDevices.getUserMedia({video:true}); faceVideo.srcObject = fStream; faceMsg.textContent='Camera ready.'; }
+  }catch(e){ alert('Camera error or permission denied'); }
+}
+
+async function verifyFace(){
+  if(!faceVideo.videoWidth) return alert('Start camera first!');
+  let c = document.createElement('canvas'); c.width = faceVideo.videoWidth; c.height = faceVideo.videoHeight;
+  c.getContext('2d').drawImage(faceVideo, 0, 0, c.width, c.height);
+  c.toBlob(async blob => {
+    let f = new FormData(); f.append('face_scan', blob, 'v.jpg');
+    faceMsg.textContent = 'Recognizing face... Please hold still.';
+    let r = await (await fetch('/api/verify_face',{method:'POST',body:f})).json();
+    faceMsg.textContent = r.message; faceMsg.className = 'status '+(r.ok?'ok':'bad');
+    if(r.ok){
+      sid.value = r.student_id;
+      qrContainer.hidden = false;
+      qr.innerHTML = <img src="/api/qr/${encodeURIComponent(r.student_id)}"><br><b>${r.name}</b>;
+      submitAtt(r.student_id);
+    }
+  }, 'image/jpeg');
+}
+
+async function startQRScan(){
+  try{
+    qStream = qStream || await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+    qrVideo.srcObject = qStream; camMsg.textContent='Scanning...'; qScan=true; requestAnimationFrame(qrLoop);
+  }catch(e){ camMsg.textContent='Camera Error'; }
+}
+
+function qrLoop(){
+  if(!qScan || !qrVideo.videoWidth) return requestAnimationFrame(qrLoop);
+  let ctx = canvas.getContext('2d'); canvas.width = qrVideo.videoWidth; canvas.height = qrVideo.videoHeight;
+  ctx.drawImage(qrVideo, 0, 0, canvas.width, canvas.height);
+  let code = jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+  if(code){ qScan=false; sid.value = code.data; submitAtt(code.data); }
+  else requestAnimationFrame(qrLoop);
+}
+
+async function submitAtt(id){
+  if(!id) return alert('No ID provided!');
+  let f = new FormData(); f.append('student_id', id); f.append('kind', kind.value);
+  verMsg.textContent = 'Processing attendance...';
+  let r = await (await fetch('/api/verify',{method:'POST',body:f})).json();
+  verMsg.textContent = r.message; verMsg.className = 'status '+(r.ok?'ok':'bad');
+  if(r.ok){
+    notify.innerHTML = <b>${r.student}</b> (${r.grade} - ${r.section}) - ${r.timestamp}<br><b>Status:</b> ${r.sms_status};
+    loadSections();
+    loadRecords();
+    setTimeout(() => { 
+      sid.value = '';
+      if(!qScan) startQRScan(); 
+    }, 3000);
+  }
+}
+
+async function loadSections(){
+  try {
+    let res = await fetch('/api/sections');
+    let sections = await res.json();
+    let current = sectionFilter.value;
+    sectionFilter.innerHTML = '<option value="All">All Sections</option>' + sections.map(s => <option value="${s}">${s}</option>).join('');
+    if(sections.includes(current)) sectionFilter.value = current;
+  } catch(e) {}
+}
+
+async function loadRecords(){
+  let sec = sectionFilter.value;
+  let list = await (await fetch(/api/attendance?section=${encodeURIComponent(sec)})).json();
+  rows.innerHTML = !list.length ? 'No records found for this section.' : '<table><tr><th>ID</th><th>Name</th><th>Grade/Sec</th><th>Type</th><th>Time</th></tr>' + 
+    list.map(x=>`<tr><td>${x.student_id}</td><td><b>${x.name}</b></td><td>${x.grade}-${x.section}</td><td>${x.kind}</td><td>${x.timestamp}</td></tr>`).join('') + '</table>';
+}
+
+function exportCSV(){
+  let sec = sectionFilter.value;
+  location.href = /api/export_attendance?section=${encodeURIComponent(sec)};
+}
+
+async function clearRecords(){ if(confirm("Clear all logs?")){ await fetch('/api/clear_attendance',{method:'POST'}); loadRecords(); } }
+checkAuth();
+</script>
+</body>
+</html>
