@@ -163,14 +163,10 @@ def register_student():
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute(
-            
-            "INSERT INTO students (student_id, name, grade, section, parent, phone, face_url)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        cur.execute("INSERT INTO students (student_id, name, grade, section, parent, phone, face_url) VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (student_id) DO UPDATE SET
             name=EXCLUDED.name, grade=EXCLUDED.grade, section=EXCLUDED.section,
             parent=EXCLUDED.parent, phone=EXCLUDED.phone, face_url=EXCLUDED.face_url",
-            
                 (sid,
                 f.get("name"),
                 f.get("grade"),
